@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lead-verifier"
+version = "0.1.0"
+description = "Integrated toolkit for scraping and verifying leads."
+authors = [{ name = "RedHatLeadScraper Team" }]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "undetected-chromedriver",
+    "beautifulsoup4",
+    "pandas",
+    "PySide6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "ruff",
+]
