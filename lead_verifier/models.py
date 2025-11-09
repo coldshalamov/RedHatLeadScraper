@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 
 # --- Core Input Models ---
@@ -68,6 +68,23 @@ class LeadInput:
         if emails is None:
             return []
         return [str(emails)]
+
+
+# --- Scraper Query Models ---
+
+@dataclass(slots=True)
+class PersonSearch:
+    """Query payload expected by legacy person lookup scrapers."""
+
+    full_name: Optional[str] = None
+    city_state_zip: Optional[str] = None
+
+    def require_name(self) -> str:
+        """Return the normalised name or raise if it is missing."""
+
+        if not self.full_name or not self.full_name.strip():
+            raise ValueError("PersonSearch queries require a full name.")
+        return self.full_name.strip()
 
 
 # --- GUI / CLI Verification Result ---
@@ -200,7 +217,7 @@ class ScraperResult:
     """Normalized response returned by scrapers."""
 
     provider: str
-    query: LeadInput
+    query: Union[LeadInput, PersonSearch]
     found: bool
     emails: List[EmailRecord] = field(default_factory=list)
     notes: ScraperNotes = field(default_factory=ScraperNotes)
