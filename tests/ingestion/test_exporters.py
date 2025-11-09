@@ -6,14 +6,18 @@ from lead_verifier.ingestion.models import EmailRecord, LeadInput, LeadResult, P
 
 def _build_sample_result() -> LeadResult:
     lead = LeadInput(
-        source_id="1",
-        full_name="Ada Lovelace",
+        name="Ada Lovelace",
         first_name="Ada",
         last_name="Lovelace",
-        company="Analytical Engines",
-        emails=["ada@example.com", "ada+alt@example.com"],
-        phones=["555-1111", "555-2222"],
-        metadata={"region": "UK"},
+        email="ada@example.com",
+        phone="555-1111",
+        metadata={
+            "source_id": "1",
+            "company": "Analytical Engines",
+            "emails": ["ada@example.com", "ada+alt@example.com"],
+            "phones": ["555-1111", "555-2222"],
+            "region": "UK",
+        },
     )
     return LeadResult(
         lead=lead,
@@ -33,13 +37,20 @@ def test_results_to_dataframe_includes_metadata_and_records():
     dataframe = results_to_dataframe([_build_sample_result()], include_metadata=True, include_raw_records=True)
 
     required_columns = {
-        "source_id",
-        "full_name",
+        "name",
+        "first_name",
+        "last_name",
+        "phone",
+        "email",
         "emails",
         "phones",
         "email_records",
         "phone_records",
         "notes",
+        "source_id",
+        "company",
+        "metadata.source_id",
+        "metadata.company",
         "metadata.region",
         "email_records_raw",
         "phone_records_raw",
@@ -64,6 +75,6 @@ def test_export_lead_results_to_csv_and_excel(tmp_path):
     csv_frame = pd.read_csv(csv_path)
     excel_frame = pd.read_excel(excel_path)
 
-    assert csv_frame.loc[0, "full_name"] == "Ada Lovelace"
+    assert csv_frame.loc[0, "name"] == "Ada Lovelace"
     assert "ada@example.com" in csv_frame.loc[0, "emails"]
     assert excel_frame.loc[0, "phone_records"].startswith("555-1111")

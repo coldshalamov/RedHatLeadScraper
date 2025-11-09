@@ -12,14 +12,11 @@ from typing import Any, Dict, Iterable, List, Optional
 class LeadInput:
     """Normalized lead data passed to scrapers and orchestrators."""
 
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
     name: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    address: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def display_name(self) -> str:
@@ -27,6 +24,50 @@ class LeadInput:
         if self.name:
             return self.name
         return " ".join(filter(None, [self.first_name, self.last_name])).strip() or "(Unnamed Lead)"
+
+    @property
+    def full_name(self) -> Optional[str]:
+        """Alias for :attr:`name` to support legacy callers."""
+
+        return self.name
+
+    @property
+    def source_id(self) -> Optional[str]:
+        return self.metadata.get("source_id")
+
+    @property
+    def company(self) -> Optional[str]:
+        return self.metadata.get("company")
+
+    @property
+    def city(self) -> Optional[str]:
+        return self.metadata.get("city")
+
+    @property
+    def state(self) -> Optional[str]:
+        return self.metadata.get("state")
+
+    @property
+    def address(self) -> Optional[str]:
+        return self.metadata.get("address")
+
+    @property
+    def phones(self) -> List[str]:
+        phones = self.metadata.get("phones", [])
+        if isinstance(phones, list):
+            return phones
+        if phones is None:
+            return []
+        return [str(phones)]
+
+    @property
+    def emails(self) -> List[str]:
+        emails = self.metadata.get("emails", [])
+        if isinstance(emails, list):
+            return emails
+        if emails is None:
+            return []
+        return [str(emails)]
 
 
 # --- GUI / CLI Verification Result ---

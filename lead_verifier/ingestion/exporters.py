@@ -55,17 +55,22 @@ def _result_to_row(
     include_raw_records: bool,
 ) -> MutableMapping[str, object]:
     row: MutableMapping[str, object] = {
-        "source_id": result.lead.source_id,
-        "full_name": result.lead.full_name,
+        "name": result.lead.name,
         "first_name": result.lead.first_name,
         "last_name": result.lead.last_name,
-        "company": result.lead.company,
+        "phone": result.lead.phone,
+        "email": result.lead.email,
         "emails": _join_list(result.lead.emails),
         "phones": _join_list(result.lead.phones),
         "email_records": _join_list(_format_email_record(record) for record in result.email_records),
         "phone_records": _join_list(_format_phone_record(record) for record in result.phone_records),
         "notes": result.notes,
     }
+
+    if result.lead.source_id:
+        row["source_id"] = result.lead.source_id
+    if result.lead.company:
+        row["company"] = result.lead.company
 
     if include_metadata:
         for key, value in result.lead.metadata.items():
