@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Callable, Iterable, List, Optional
 from urllib.parse import quote_plus
 
-from ..models import LeadInput, LeadResult, PhoneNumberResult
+from ..models import (
+    ContactDetail,
+    LeadInput,
+    LeadVerification,
+    PhoneNumberResult,
+    phone_results_to_contacts,
+)
 
 try:  # pragma: no cover - import guard for optional dependency
     from selenium import webdriver
@@ -110,7 +116,7 @@ class FastPeopleSearchScraper:
             self._driver.quit()
             self._driver = None
 
-    def verify(self, lead: LeadInput) -> LeadResult:
+    def verify(self, lead: LeadInput) -> LeadVerification:
         driver = self._ensure_driver()
         if self._rate_limiter is not None:
             self._rate_limiter()
@@ -127,12 +133,17 @@ class FastPeopleSearchScraper:
             LOGGER.exception("Failed to retrieve results for %s %s", lead.first_name, lead.last_name)
             errors.append(str(exc))
 
-        metadata = {
-            "search_url": search_url,
-            "phone_count": len(phones),
+        contacts: List[ContactDetail] = phone_results_to_contacts(phones)
+        raw_data = {
+            "metadata": {
+                "search_url": search_url,
+                "phone_count": len(contacts),
+            },
+            "phone_results": [asdict(phone) for phone in phones],
+            "errors": errors,
         }
 
-        return LeadResult(lead=lead, phone_numbers=phones, metadata=metadata, errors=errors)
+        return LeadVerification(source=self.name, contacts=contacts, raw_data=raw_data)
 
     def _extract_phone_numbers(self, driver: WebDriver) -> List[PhoneNumberResult]:
         wait_timeout = max(self.config.wait_timeout_seconds, 1.0)
