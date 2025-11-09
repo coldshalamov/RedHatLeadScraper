@@ -23,10 +23,9 @@ def merge_lead_results(
 
     aggregated: dict[str, AggregatedContact] = {}
     ordered_keys: List[str] = []
+    result_list: List[LeadVerification] = [result for result in results if result is not None]
 
-    for result in results:
-        if result is None:
-            continue
+    for result in result_list:
         for contact in result.contacts:
             key = f"{contact.type.lower()}::{_normalise_contact(contact)}"
             if not key:
@@ -47,5 +46,5 @@ def merge_lead_results(
     return AggregatedLeadResult(
         lead=lead,
         contacts=ordered_contacts,
-        raw_results=list(results),
+        raw_results=result_list,
     )

@@ -14,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-from lead_verifier import LeadInput  # noqa: E402  (import after path fix)
+from lead_verifier import LeadInput, LeadVerification  # noqa: E402  (import after path fix)
 from lead_verifier.scrapers.fast_people_search import (  # noqa: E402
     FastPeopleSearchConfig,
     FastPeopleSearchScraper,
@@ -92,38 +92,49 @@ def run_scraper(args: argparse.Namespace) -> None:
     with FastPeopleSearchScraper(config=config) as scraper:
         result = scraper.verify(lead)
 
-    pretty_print_result(result)
+    pretty_print_result(lead, result)
 
     if args.output_json:
-        args.output_json.write_text(json.dumps(asdict(result), indent=2))
+        payload = {
+            "lead": asdict(lead),
+            "verification": asdict(result),
+        }
+        args.output_json.write_text(json.dumps(payload, indent=2))
         LOGGER.info("Wrote result JSON to %s", args.output_json)
 
 
-def pretty_print_result(result) -> None:
+def pretty_print_result(lead: LeadInput, result: LeadVerification) -> None:
     print("Lead:")
-    print(f"  {result.lead.first_name} {result.lead.last_name}")
-    if result.lead.city or result.lead.state:
-        print(f"  Location: {result.lead.city or ''} {result.lead.state or ''}".strip())
-    if result.lead.address:
-        print(f"  Address: {result.lead.address}")
+    print(f"  {lead.first_name or ''} {lead.last_name or ''}".strip())
+    if lead.city or lead.state:
+        print(f"  Location: {lead.city or ''} {lead.state or ''}".strip())
+    if lead.address:
+        print(f"  Address: {lead.address}")
 
-    if not result.phone_numbers:
+    contacts = list(result.contacts)
+    if not contacts:
         print("No phone numbers found.")
     else:
         print("Phone Numbers:")
-        for phone in result.phone_numbers:
-            label = f" ({phone.label})" if phone.label else ""
-            primary = " [primary]" if phone.is_primary else ""
-            print(f"  - {phone.phone_number}{label}{primary}")
+        for contact in contacts:
+            if contact.type.lower() != "phone":
+                continue
+            label = contact.metadata.get("label") if contact.metadata else None
+            primary = contact.metadata.get("is_primary") if contact.metadata else None
+            label_text = f" ({label})" if label else ""
+            primary_text = " [primary]" if primary else ""
+            print(f"  - {contact.value}{label_text}{primary_text}")
 
-    if result.metadata:
+    metadata = (result.raw_data or {}).get("metadata", {})
+    if metadata:
         print("Metadata:")
-        for key, value in result.metadata.items():
+        for key, value in metadata.items():
             print(f"  {key}: {value}")
 
-    if result.errors:
+    errors = (result.raw_data or {}).get("errors", [])
+    if errors:
         print("Errors:")
-        for err in result.errors:
+        for err in errors:
             print(f"  - {err}")
 
 

@@ -10,6 +10,8 @@ from .models import (
     LeadVerification,
     AggregatedContact,
     AggregatedLeadResult,
+    email_records_to_contacts,
+    phone_results_to_contacts,
 )
 
 __all__ = [
@@ -21,6 +23,8 @@ __all__ = [
     "AggregatedContact",
     "AggregatedLeadResult",
     "LeadVerifierOrchestrator",
+    "email_records_to_contacts",
+    "phone_results_to_contacts",
     "ingestion",
     "scrapers",
     "orchestrator",

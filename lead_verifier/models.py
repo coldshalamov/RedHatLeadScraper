@@ -104,6 +104,7 @@ class ContactDetail:
 
     type: str
     value: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -111,7 +112,7 @@ class LeadVerification:
     """Result produced by an individual scraper."""
 
     source: str
-    contacts: Iterable[ContactDetail] = field(default_factory=list)
+    contacts: List[ContactDetail] = field(default_factory=list)
     raw_data: Optional[dict] = None
 
 
@@ -144,6 +145,18 @@ class EmailRecord:
     metadata: Dict[str, str] = field(default_factory=dict)
 
 
+def email_records_to_contacts(emails: Iterable[EmailRecord]) -> List[ContactDetail]:
+    """Translate email records into standardized contact details."""
+
+    contacts: List[ContactDetail] = []
+    for email in emails:
+        metadata = dict(email.metadata)
+        if email.label:
+            metadata.setdefault("label", email.label)
+        contacts.append(ContactDetail(type="email", value=email.address, metadata=metadata))
+    return contacts
+
+
 @dataclass(slots=True)
 class PhoneNumberResult:
     """Represents a phone number discovered for a lead."""
@@ -152,6 +165,24 @@ class PhoneNumberResult:
     label: Optional[str] = None
     is_primary: Optional[bool] = None
     raw_text: Optional[str] = None
+
+
+def phone_results_to_contacts(phone_numbers: Iterable[PhoneNumberResult]) -> List[ContactDetail]:
+    """Translate phone number results into standardized contact details."""
+
+    contacts: List[ContactDetail] = []
+    for phone in phone_numbers:
+        metadata = {
+            key: value
+            for key, value in {
+                "label": phone.label,
+                "is_primary": phone.is_primary,
+                "raw_text": phone.raw_text,
+            }.items()
+            if value is not None and value != ""
+        }
+        contacts.append(ContactDetail(type="phone", value=phone.phone_number, metadata=metadata))
+    return contacts
 
 
 @dataclass
