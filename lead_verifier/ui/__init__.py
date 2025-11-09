@@ -1,3 +1,5 @@
-"""User interface components for driving the lead verification toolkit."""
+"""User interface components and entry points for the lead verification toolkit."""
 
-__all__: list[str] = []
+from .app import LeadVerifierApp, main  # noqa: F401
+
+__all__ = ["LeadVerifierApp", "main"]

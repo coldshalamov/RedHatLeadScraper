@@ -10,6 +10,7 @@ from .models import (
     AggregatedContact,
     AggregatedLeadResult,
 )
+from .orchestrator import LeadVerifierOrchestrator  # noqa: F401
 
 __all__ = [
     "LeadInput",
@@ -19,6 +20,7 @@ __all__ = [
     "LeadVerification",
     "AggregatedContact",
     "AggregatedLeadResult",
+    "LeadVerifierOrchestrator",
     "ingestion",
     "scrapers",
     "orchestrator",
