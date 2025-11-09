@@ -66,12 +66,19 @@ def configure_logging(level: str) -> None:
 def run_scraper(args: argparse.Namespace) -> None:
     configure_logging(args.log_level)
 
+    metadata = {}
+    if args.city:
+        metadata["city"] = args.city
+    if args.state:
+        metadata["state"] = args.state
+    if args.address:
+        metadata["address"] = args.address
+
     lead = LeadInput(
         first_name=args.first_name,
         last_name=args.last_name,
-        city=args.city,
-        state=args.state,
-        address=args.address,
+        name=" ".join(filter(None, [args.first_name, args.last_name])) or None,
+        metadata=metadata,
     )
 
     config = FastPeopleSearchConfig(

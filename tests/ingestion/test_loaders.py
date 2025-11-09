@@ -48,11 +48,14 @@ def test_load_leads_from_csv_with_mapping(sample_dataframe, tmp_path):
     assert len(leads) == 2
     first, second = leads
     assert first.source_id == "1"
-    assert first.full_name == "Ada Lovelace"
+    assert first.name == "Ada Lovelace"
+    assert first.email == "ada@example.com"
+    assert first.phone == "555-1111"
     assert first.emails == ["ada@example.com", "ada+alt@example.com"]
     assert first.phones == ["555-1111", "555-2222"]
-    assert second.emails == ["grace@example.com"]
-    assert second.phones == ["555-3333"]
+    assert first.metadata["company"] == "Analytical Engines"
+    assert second.email == "grace@example.com"
+    assert second.phone == "555-3333"
 
 
 def test_load_leads_from_excel_with_automatic_mapping(sample_dataframe, tmp_path):
@@ -72,7 +75,7 @@ def test_load_leads_from_excel_with_automatic_mapping(sample_dataframe, tmp_path
 
     assert len(leads) == 2
     assert leads[0].source_id == "1"
-    assert leads[0].full_name == "Ada Lovelace"
+    assert leads[0].name == "Ada Lovelace"
     assert leads[0].emails == ["ada@example.com", "ada+alt@example.com"]
     assert leads[0].phones == ["555-1111", "555-2222"]
 

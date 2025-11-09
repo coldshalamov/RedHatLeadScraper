@@ -107,14 +107,29 @@ def _row_to_lead(
         if not pd.isna(value) and (not isinstance(value, str) or value.strip())
     }
 
+    if source_id:
+        metadata["source_id"] = source_id
+    if company:
+        metadata["company"] = company
+    if full_name:
+        metadata["full_name"] = full_name
+    metadata["emails"] = emails
+    metadata["phones"] = phones
+    if first_name:
+        metadata["first_name"] = first_name
+    if last_name:
+        metadata["last_name"] = last_name
+
+    name = full_name or " ".join(filter(None, [first_name, last_name])) or None
+    primary_email = emails[0] if emails else None
+    primary_phone = phones[0] if phones else None
+
     return LeadInput(
-        source_id=source_id,
-        full_name=full_name,
+        name=name,
+        phone=primary_phone,
+        email=primary_email,
         first_name=first_name,
         last_name=last_name,
-        company=company,
-        emails=emails,
-        phones=phones,
         metadata=metadata,
     )
 

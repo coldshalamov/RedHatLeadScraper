@@ -4,19 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-
-@dataclass(slots=True)
-class LeadInput:
-    """Normalized representation of a lead imported from a spreadsheet."""
-
-    source_id: Optional[str] = None
-    full_name: Optional[str] = None
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    company: Optional[str] = None
-    emails: List[str] = field(default_factory=list)
-    phones: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+from ..models import LeadInput
 
 
 @dataclass(slots=True)

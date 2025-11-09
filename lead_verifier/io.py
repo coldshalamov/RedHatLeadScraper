@@ -57,11 +57,35 @@ def _load_leads_from_excel(path: Path) -> List[LeadInput]:
 
 
 def _row_to_lead(row: dict) -> LeadInput:
-    key_map = {"first_name", "last_name", "city", "state", "phone", "email"}
     normalised = {_normalise_key(key): value for key, value in row.items() if key}
-    kwargs = {field: normalised.get(field) for field in key_map if field in normalised}
-    metadata = {key: value for key, value in row.items() if _normalise_key(key) not in key_map}
-    return LeadInput(**kwargs, metadata={k: str(v) if v is not None else "" for k, v in metadata.items()})
+
+    first_name = normalised.get("first_name")
+    last_name = normalised.get("last_name")
+    name = normalised.get("name") or " ".join(filter(None, [first_name, last_name])) or None
+    phone = normalised.get("phone")
+    email = normalised.get("email")
+
+    metadata = {key: value for key, value in row.items() if _normalise_key(key) not in {"first_name", "last_name", "name", "phone", "email"}}
+    metadata.update(
+        {
+            key: value
+            for key, value in {
+                "city": normalised.get("city"),
+                "state": normalised.get("state"),
+                "address": normalised.get("address"),
+            }.items()
+            if value is not None and value != ""
+        }
+    )
+
+    return LeadInput(
+        name=name,
+        phone=phone,
+        email=email,
+        first_name=first_name,
+        last_name=last_name,
+        metadata={k: str(v) if v is not None else "" for k, v in metadata.items()},
+    )
 
 
 def write_results(path: str | Path, results: Iterable[AggregatedLeadResult]) -> None:

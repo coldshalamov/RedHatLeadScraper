@@ -54,6 +54,25 @@ the JSON variant.) Each scraper entry can:
 - Apply artificial delays via `delay_seconds`.
 - Enforce rate limiting with `rate_limit_per_minute`.
 
+### Lead data schema
+
+All ingestion utilities, scrapers, and orchestrators exchange leads via the
+`LeadInput` dataclass defined in `lead_verifier.models`. The canonical fields
+are:
+
+- `name`: primary display name for the lead.
+- `phone`: primary phone number.
+- `email`: primary email address.
+- `first_name` / `last_name`: optional structured name parts.
+- `metadata`: dictionary for any additional attributes.
+
+Ingestion loaders promote the first discovered phone/email into the top-level
+fields while preserving every column from the spreadsheet inside the metadata
+mapping. Common keys include `source_id`, `company`, `city`, `state`, and the
+full lists of contact methods stored under `emails` and `phones`. Future
+scrapers should rely on the top-level fields for canonical data and fall back to
+`metadata` for provider-specific or auxiliary attributes.
+
 ### Bundled example scraper
 
 The repository includes a simple `EchoScraper` implementation that echoes back
