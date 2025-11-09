@@ -55,6 +55,7 @@ class FastPeopleSearchConfig:
 class FastPeopleSearchScraper:
     """Scrape fastpeoplesearch.com and normalize the results."""
 
+    name = "fast_people_search"
     BASE_URL = "https://www.fastpeoplesearch.com"
 
     def __init__(
