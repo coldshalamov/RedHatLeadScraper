@@ -12,10 +12,12 @@ from .models import (
     AggregatedLeadResult,
     email_records_to_contacts,
     phone_results_to_contacts,
+    PersonSearch,
 )
 
 __all__ = [
     "LeadInput",
+    "PersonSearch",
     "LeadResult",
     "PhoneNumberResult",
     "ContactDetail",
