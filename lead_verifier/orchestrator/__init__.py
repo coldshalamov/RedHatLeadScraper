@@ -1,3 +1,5 @@
 """Workflow orchestration for coordinating ingestion, verification, and export."""
 
-__all__: list[str] = []
+from .service import VerificationOrchestrator
+
+__all__ = ["VerificationOrchestrator"]

@@ -1,29 +1,30 @@
-"""Shared data models and structures for lead verification scrapers and workflow."""
+"""Unified data models for the lead verification orchestrator and scraper workflow."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 
 # --- Input Models ---
 
+@dataclass(frozen=True)
+class LeadInput:
+    """Input data used to query scrapers for contact verification."""
+
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    metadata: Dict[str, str] = field(default_factory=dict)
+
+
 @dataclass
 class PersonSearch:
-    """Input parameters used by scrapers to look up a person.
-
-    Attributes
-    ----------
-    first_name:
-        The person's given name. Optional, but at least one of
-        ``first_name`` and ``last_name`` must be provided.
-    last_name:
-        The person's family name.
-    city_state_zip:
-        Optional location hint such as ``"Austin, TX"`` or a zip code. The
-        scrapers simply append this string to the provider specific search
-        field.
-    """
+    """Input parameters used by scrapers to look up a person."""
 
     first_name: str = ""
     last_name: str = ""
@@ -40,18 +41,44 @@ class PersonSearch:
             raise ValueError("At least one of first_name or last_name must be provided.")
 
 
-@dataclass(slots=True)
-class LeadInput:
-    """Minimal information required to query a lead."""
+# --- Contact & Verification Models ---
 
-    first_name: str
-    last_name: str
-    city: Optional[str] = None
-    state: Optional[str] = None
-    address: Optional[str] = None
+@dataclass(frozen=True)
+class ContactDetail:
+    """Represents a phone number, email address, or other contact detail."""
+
+    type: str
+    value: str
 
 
-# --- Result Models ---
+@dataclass(frozen=True)
+class LeadVerification:
+    """Result produced by an individual scraper."""
+
+    source: str
+    contacts: Iterable[ContactDetail] = field(default_factory=list)
+    raw_data: Optional[dict] = None
+
+
+@dataclass(frozen=True)
+class AggregatedContact:
+    """A merged contact detail annotated with all contributing sources."""
+
+    type: str
+    value: str
+    sources: List[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class AggregatedLeadResult:
+    """Combined result for a single lead after merging scraper outputs."""
+
+    lead: LeadInput
+    contacts: List[AggregatedContact] = field(default_factory=list)
+    raw_results: List[LeadVerification] = field(default_factory=list)
+
+
+# --- Scraper Results (for detailed results from scrapers) ---
 
 @dataclass
 class EmailRecord:
