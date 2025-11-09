@@ -1,2 +1,27 @@
+# Python cache and build artifacts
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.env
+.venv
+venv/
+ENV/
+
+# Local configuration
+*.env
+*.local
+
+# IDE settings
+.vscode/
+.idea/
+
+# Ignore transient assets but keep tracked examples
+assets/tmp/
+assets/private/

@@ -1,5 +1,15 @@
-"""Bundled scraper implementations and examples."""
+"""Web scrapers and adapters for third-party lead sources."""
 
-from .sample import EchoScraper
+from .base import BrowserScraper, BrowserScraperConfig  # noqa: F401
+from .fast_people_search import FastPeopleSearchScraper  # noqa: F401
+from .true_people_search import TruePeopleSearchConfig, TruePeopleSearchScraper  # noqa: F401
+from .sample import EchoScraper  # noqa: F401
 
-__all__ = ["EchoScraper"]
+__all__ = [
+    "BrowserScraper",
+    "BrowserScraperConfig",
+    "FastPeopleSearchScraper",
+    "TruePeopleSearchConfig",
+    "TruePeopleSearchScraper",
+    "EchoScraper",
+]

@@ -1,11 +1,26 @@
-"""Core package for orchestrating lead verification across multiple scrapers."""
+"""Top-level package for the integrated lead verification toolkit."""
 
-from .models import LeadInput, ContactDetail, LeadVerification, AggregatedContact, AggregatedLeadResult
+from . import models  # noqa: F401
+from .models import (
+    LeadInput,
+    LeadResult,
+    PhoneNumberResult,
+    ContactDetail,
+    LeadVerification,
+    AggregatedContact,
+    AggregatedLeadResult,
+)
 
 __all__ = [
     "LeadInput",
+    "LeadResult",
+    "PhoneNumberResult",
     "ContactDetail",
     "LeadVerification",
     "AggregatedContact",
     "AggregatedLeadResult",
+    "ingestion",
+    "scrapers",
+    "orchestrator",
+    "ui",
 ]

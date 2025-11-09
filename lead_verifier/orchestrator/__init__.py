@@ -1,4 +1,4 @@
-"""Orchestrator package for coordinating verification across scrapers."""
+"""Workflow orchestration for coordinating ingestion, verification, and export."""
 
 from .service import VerificationOrchestrator
 
