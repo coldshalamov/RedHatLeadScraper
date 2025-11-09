@@ -1,16 +1,180 @@
 """Tkinter based desktop application for the lead verifier."""
 from __future__ import annotations
 
+import importlib.util
 import itertools
+import json
+import logging
+import os
 import queue
+import threading
+from concurrent.futures import Future, ThreadPoolExecutor
+from pathlib import Path
 import tkinter as tk
 from dataclasses import dataclass
 from tkinter import filedialog, messagebox, ttk
-from typing import Dict, Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional
 
-from ..ingestion import export_to_csv, export_to_excel
-from ..legacy_orchestrator import LeadVerifierOrchestrator, LeadVerificationTask
-from ..models import LeadVerificationResult
+from ..config import ConfigurationError, load_configuration
+from ..factory import build_scrapers
+from ..io import write_results
+from ..models import AggregatedLeadResult, LeadInput
+from ..orchestrator import VerificationOrchestrator
+from ..scrapers.sample import EchoScraper
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _clean_value(value: object) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    text = str(value).strip()
+    return text or None
+
+
+def load_rows_from_file(path: str | Path) -> List[Dict[str, str]]:
+    file_path = Path(path)
+    if not file_path.exists():
+        raise FileNotFoundError(file_path)
+
+    suffix = file_path.suffix.lower()
+    if suffix == ".csv":
+        import csv
+
+        rows: List[Dict[str, str]] = []
+        with file_path.open("r", newline="", encoding="utf-8-sig") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                cleaned = {str(key): _clean_value(value) or "" for key, value in row.items() if key}
+                if any(value for value in cleaned.values()):
+                    rows.append(cleaned)
+        return rows
+
+    if suffix in {".xlsx", ".xlsm", ".xltx", ".xltm"}:
+        if importlib.util.find_spec("openpyxl") is None:
+            raise RuntimeError("Reading Excel files requires the 'openpyxl' package")
+        from openpyxl import load_workbook  # type: ignore
+
+        workbook = load_workbook(filename=file_path, read_only=True)
+        sheet = workbook.active
+        rows_iter = sheet.iter_rows(values_only=True)
+        try:
+            header_row = next(rows_iter)
+        except StopIteration:
+            return []
+        header = [str(cell).strip() for cell in header_row if cell is not None]
+        rows: List[Dict[str, str]] = []
+        for values in rows_iter:
+            record: Dict[str, str] = {}
+            for index, column in enumerate(header):
+                cell_value = values[index] if index < len(values) else None
+                record[column] = _clean_value(cell_value) or ""
+            if any(value for value in record.values()):
+                rows.append(record)
+        return rows
+
+    if suffix == ".xls":
+        if importlib.util.find_spec("pandas") is None:
+            raise RuntimeError("Reading .xls files requires the 'pandas' package")
+        import pandas as pd  # type: ignore
+
+        dataframe = pd.read_excel(file_path)
+        dataframe = dataframe.fillna("")
+        rows: List[Dict[str, str]] = []
+        for _, series in dataframe.iterrows():
+            record = {str(column): _clean_value(series[column]) or "" for column in dataframe.columns}
+            if any(value for value in record.values()):
+                rows.append(record)
+        return rows
+
+    raise ValueError(f"Unsupported file type: {file_path.suffix}")
+
+
+def normalise_lead_row(row: Dict[str, str], mapping: Dict[str, str]) -> LeadInput:
+    mapping = {field: column for field, column in mapping.items() if column}
+
+    def resolve(column: Optional[str]) -> Optional[str]:
+        if not column:
+            return None
+        return _clean_value(row.get(column))
+
+    name = resolve(mapping.get("name")) or None
+    phone = resolve(mapping.get("phone")) or None
+    email = resolve(mapping.get("email")) or None
+
+    metadata: Dict[str, str] = {
+        str(key): (_clean_value(value) or "")
+        for key, value in row.items()
+        if str(key).strip()
+    }
+
+    for field, column in mapping.items():
+        if field in {"name", "phone", "email"}:
+            continue
+        value = resolve(column)
+        if value is not None:
+            metadata[field] = value
+
+    first_name = metadata.get("first_name")
+    last_name = metadata.get("last_name")
+    if name:
+        parts = name.split()
+        if parts and not first_name:
+            first_name = parts[0]
+        if len(parts) > 1 and not last_name:
+            last_name = parts[-1]
+
+    if first_name:
+        metadata.setdefault("first_name", first_name)
+    if last_name:
+        metadata.setdefault("last_name", last_name)
+
+    return LeadInput(
+        name=name,
+        phone=phone,
+        email=email,
+        first_name=first_name,
+        last_name=last_name,
+        metadata=metadata,
+    )
+
+
+def run_verification_job(
+    orchestrator: VerificationOrchestrator,
+    rows: Iterable[Dict[str, str]],
+    mapping: Dict[str, str],
+    *,
+    cancel_event: Optional[threading.Event] = None,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+    result_callback: Optional[Callable[[AggregatedLeadResult], None]] = None,
+) -> List[AggregatedLeadResult]:
+    lead_rows = list(rows)
+    leads = [normalise_lead_row(row, mapping) for row in lead_rows]
+    total = len(leads)
+    aggregated_results: List[AggregatedLeadResult] = []
+
+    if total == 0:
+        if progress_callback:
+            progress_callback(0, 0)
+        return aggregated_results
+
+    for index, lead in enumerate(leads, start=1):
+        if cancel_event and cancel_event.is_set():
+            break
+        aggregated = orchestrator.verify([lead])[0]
+        aggregated_results.append(aggregated)
+        if result_callback:
+            result_callback(aggregated)
+        if progress_callback:
+            progress_callback(index, total)
+        if cancel_event and cancel_event.is_set():
+            break
+
+    return aggregated_results
 
 
 @dataclass
@@ -30,6 +194,7 @@ class MappingFrame(ttk.LabelFrame):
         "email": "Email",
         "company": "Company",
         "city": "City",
+        "state": "State",
     }
 
     def __init__(self, master: tk.Misc) -> None:
@@ -62,7 +227,7 @@ class MappingFrame(ttk.LabelFrame):
         for column in columns:
             lowered = column.lower()
             for field in self.FIELD_LABELS:
-                if field in {"company", "city"}:
+                if field in {"company", "city", "state"}:
                     if lowered == field:
                         self.comboboxes[field].set(column)
                 elif lowered == field or lowered.replace(" ", "") == field:
@@ -90,11 +255,13 @@ class LeadVerifierApp:
         self.root.geometry("1024x720")
         self.root.minsize(900, 640)
 
-        self.orchestrator = LeadVerifierOrchestrator()
+        self.orchestrator = self._build_orchestrator()
         self.event_queue: "queue.Queue[tuple]" = queue.Queue()
-        self.current_task: Optional[LeadVerificationTask] = None
+        self._executor = ThreadPoolExecutor(max_workers=1)
+        self.current_task: Optional[Future[List[AggregatedLeadResult]]] = None
+        self._cancel_event: Optional[threading.Event] = None
         self.loaded_rows: List[Dict[str, str]] = []
-        self.result_rows: List[LeadVerificationResult] = []
+        self.result_rows: List[AggregatedLeadResult] = []
         self.source_styles: Dict[str, SourceStyle] = {}
         self._color_cycle = itertools.cycle(self.SOURCE_COLORS)
 
@@ -173,9 +340,9 @@ class LeadVerifierApp:
         ttk.Button(btn_bar, text="Export CSV", command=self.export_csv).pack(side="left", padx=(0, 4))
         ttk.Button(btn_bar, text="Export Excel", command=self.export_excel).pack(side="left")
 
-        columns = ("lead", "status", "source", "details")
+        columns = ("lead", "contacts", "sources", "metadata")
         self.results_tree = ttk.Treeview(frame, columns=columns, show="headings")
-        for column, heading in zip(columns, ["Lead", "Status", "Source", "Details"]):
+        for column, heading in zip(columns, ["Lead", "Contacts", "Sources", "Metadata"]):
             self.results_tree.heading(column, text=heading)
             self.results_tree.column(column, anchor="w")
         self.results_tree.grid(row=1, column=0, sticky="nsew", padx=4, pady=4)
@@ -190,7 +357,7 @@ class LeadVerifierApp:
         if not path:
             return
         try:
-            rows = self.orchestrator.load_leads(path)
+            rows = load_rows_from_file(path)
         except Exception as exc:  # pragma: no cover - GUI surface
             messagebox.showerror("Import failed", str(exc))
             return
@@ -237,40 +404,39 @@ class LeadVerifierApp:
         self.source_styles.clear()
         self._color_cycle = itertools.cycle(self.SOURCE_COLORS)
 
-        total = len(self.loaded_rows)
+        self._cancel_event = threading.Event()
 
         def progress_callback(current: int, total_rows: int) -> None:
             self.event_queue.put(("progress", current, total_rows))
 
-        def result_callback(result: LeadVerificationResult) -> None:
+        def result_callback(result: AggregatedLeadResult) -> None:
             self.event_queue.put(("result", result))
 
-        def completion_callback(results: List[LeadVerificationResult]) -> None:
-            self.event_queue.put(("done", results))
+        def worker() -> List[AggregatedLeadResult]:
+            try:
+                results = run_verification_job(
+                    self.orchestrator,
+                    self.loaded_rows,
+                    mapping,
+                    cancel_event=self._cancel_event,
+                    progress_callback=progress_callback,
+                    result_callback=result_callback,
+                )
+            except Exception as exc:  # pragma: no cover - GUI surface
+                self.event_queue.put(("error", exc))
+                results = []
+            cancelled = bool(self._cancel_event and self._cancel_event.is_set())
+            self.event_queue.put(("done", results, cancelled))
+            return results
 
-        try:
-            self.current_task = self.orchestrator.verify_async(
-                leads=self.loaded_rows,
-                mapping=mapping,
-                progress_callback=progress_callback,
-                result_callback=result_callback,
-                completion_callback=completion_callback,
-            )
-        except Exception as exc:  # pragma: no cover - GUI surface
-            messagebox.showerror("Verification failed", str(exc))
-            self.status_var.set("Error starting verification")
-            return
-
-        if total:
-            self.progress_step = 100.0 / total
-        else:
-            self.progress_step = 0
+        self.current_task = self._executor.submit(worker)
         self.status_var.set("Verification running...")
 
     # ------------------------------------------------------------------
     def cancel_verification(self) -> None:
         if self.current_task and not self.current_task.done():
-            self.current_task.cancel()
+            if self._cancel_event:
+                self._cancel_event.set()
             self.status_var.set("Cancellation requested")
 
     # ------------------------------------------------------------------
@@ -291,7 +457,7 @@ class LeadVerifierApp:
         if not path:
             return
         try:
-            export_to_csv(path, self.result_rows)
+            write_results(path, self.result_rows)
         except Exception as exc:  # pragma: no cover - GUI surface
             messagebox.showerror("Export failed", str(exc))
             return
@@ -302,11 +468,18 @@ class LeadVerifierApp:
         if not self.result_rows:
             messagebox.showinfo("No results", "Run a verification job before exporting.")
             return
-        path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel", "*.xlsx"), ("Excel 97-2004", "*.xls")])
+        path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[
+                ("Excel", "*.xlsx"),
+                ("Excel macro-enabled", "*.xlsm"),
+                ("Excel template", "*.xltx *.xltm"),
+            ],
+        )
         if not path:
             return
         try:
-            export_to_excel(path, self.result_rows)
+            write_results(path, self.result_rows)
         except Exception as exc:  # pragma: no cover - GUI surface
             messagebox.showerror("Export failed", str(exc))
             return
@@ -330,23 +503,28 @@ class LeadVerifierApp:
             _, current, total = event
             if total:
                 self.progress_var.set(min(100.0, (current / total) * 100.0))
+            else:
+                self.progress_var.set(0.0)
             self.status_var.set(f"Processing lead {current} of {total}")
         elif kind == "result":
             _, result = event
             self.result_rows.append(result)
             self.refresh_result_table()
+        elif kind == "error":
+            _, exc = event
+            messagebox.showerror("Verification failed", str(exc))
+            self.status_var.set("Verification failed")
         elif kind == "done":
-            _, results = event
-            # Ensure we capture any final results emitted directly in completion callback
+            _, results, cancelled = event
             if results:
-                existing_ids = {(res.lead.name, res.source, res.status, res.details) for res in self.result_rows}
-                for result in results:
-                    key = (result.lead.name, result.source, result.status, result.details)
-                    if key not in existing_ids:
-                        self.result_rows.append(result)
+                self.result_rows = results
             self.refresh_result_table()
-            self.status_var.set("Verification finished")
+            if cancelled:
+                self.status_var.set("Verification cancelled")
+            elif self.status_var.get() not in {"Verification failed", "Error starting verification"}:
+                self.status_var.set("Verification finished")
             self.current_task = None
+            self._cancel_event = None
             self.progress_var.set(100.0 if self.result_rows else 0.0)
 
     # ------------------------------------------------------------------
@@ -356,30 +534,40 @@ class LeadVerifierApp:
 
         term = self.filter_var.get().strip().lower()
         for result in self._filtered_results(term):
-            tag = self._tag_for_source(result.source)
+            sources = self._sources_for_result(result)
+            tag = self._tag_for_sources(sources)
             self.results_tree.insert(
                 "",
                 "end",
-                values=(self._format_lead(result), result.status, result.source, result.details),
+                values=(
+                    self._format_lead(result),
+                    self._format_contacts(result),
+                    ", ".join(sources) if sources else "—",
+                    self._format_metadata(result),
+                ),
                 tags=(tag,),
             )
 
     # ------------------------------------------------------------------
-    def _filtered_results(self, term: str) -> Iterable[LeadVerificationResult]:
+    def _filtered_results(self, term: str) -> Iterable[AggregatedLeadResult]:
         if not term:
             return list(self.result_rows)
-        filtered: List[LeadVerificationResult] = []
+        filtered: List[AggregatedLeadResult] = []
         for result in self.result_rows:
             haystack = " ".join(
                 filter(
                     None,
                     [
-                        result.lead.name,
+                        result.lead.display_name(),
                         result.lead.phone or "",
                         result.lead.email or "",
-                        result.source,
-                        result.status,
-                        result.details,
+                        json.dumps(result.lead.metadata, ensure_ascii=False),
+                        " ".join(contact.value for contact in result.contacts),
+                        " ".join(
+                            source
+                            for contact in result.contacts
+                            for source in contact.sources
+                        ),
                     ],
                 )
             ).lower()
@@ -388,25 +576,56 @@ class LeadVerifierApp:
         return filtered
 
     # ------------------------------------------------------------------
-    def _format_lead(self, result: LeadVerificationResult) -> str:
-        parts = [result.lead.name]
-        if result.lead.phone:
-            parts.append(result.lead.phone)
-        if result.lead.email:
-            parts.append(result.lead.email)
-        return " · ".join(parts)
+    def _format_lead(self, result: AggregatedLeadResult) -> str:
+        lead = result.lead
+        parts = [lead.display_name()]
+        if lead.phone:
+            parts.append(lead.phone)
+        if lead.email:
+            parts.append(lead.email)
+        location = ", ".join(filter(None, [lead.city, lead.state]))
+        if location:
+            parts.append(location)
+        if lead.company:
+            parts.append(lead.company)
+        return " · ".join(filter(None, parts))
 
     # ------------------------------------------------------------------
-    def _tag_for_source(self, source: str) -> str:
-        if source not in self.source_styles:
+    def _format_contacts(self, result: AggregatedLeadResult) -> str:
+        if not result.contacts:
+            return "No contacts found"
+        return "; ".join(f"{contact.type}:{contact.value}" for contact in result.contacts)
+
+    # ------------------------------------------------------------------
+    def _format_metadata(self, result: AggregatedLeadResult) -> str:
+        lead = result.lead
+        metadata_parts = []
+        if lead.company:
+            metadata_parts.append(f"Company: {lead.company}")
+        if lead.metadata:
+            interesting = {k: v for k, v in lead.metadata.items() if k not in {"company", "city", "state", "name", "phone", "email"}}
+            if interesting:
+                metadata_parts.extend(f"{key}: {value}" for key, value in interesting.items())
+        return "; ".join(metadata_parts) if metadata_parts else "—"
+
+    # ------------------------------------------------------------------
+    def _sources_for_result(self, result: AggregatedLeadResult) -> List[str]:
+        sources = sorted({source for contact in result.contacts for source in contact.sources})
+        if not sources and result.raw_results:
+            sources = sorted({raw.source for raw in result.raw_results if getattr(raw, "source", "")})
+        return sources
+
+    # ------------------------------------------------------------------
+    def _tag_for_sources(self, sources: Iterable[str]) -> str:
+        key = ",".join(sources) if sources else "(unknown)"
+        if key not in self.source_styles:
             style = next(self._color_cycle)
-            self.source_styles[source] = style
-            tag_name = f"source::{source}"
+            self.source_styles[key] = style
+            tag_name = f"source::{key}"
             self.results_tree.tag_configure(tag_name, background=style.background, foreground=style.foreground)
         else:
-            style = self.source_styles[source]
-            tag_name = f"source::{source}"
-            # Ensure tag exists in case Treeview was recreated
+            style = self.source_styles[key]
+            tag_name = f"source::{key}"
             self.results_tree.tag_configure(tag_name, background=style.background, foreground=style.foreground)
         return tag_name
 
@@ -415,8 +634,32 @@ class LeadVerifierApp:
         if self.current_task and not self.current_task.done():
             if not messagebox.askyesno("Quit", "A verification job is running. Quit anyway?"):
                 return
-        self.orchestrator.shutdown()
+            if self._cancel_event:
+                self._cancel_event.set()
+        self._executor.shutdown(wait=False, cancel_futures=True)
+        for scraper in getattr(self.orchestrator, "scrapers", []):  # pragma: no cover - cleanup
+            close = getattr(scraper, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:  # pragma: no cover - defensive cleanup
+                    LOGGER.exception("Failed to close scraper %s", scraper)
         self.root.destroy()
+
+    # ------------------------------------------------------------------
+    def _build_orchestrator(self) -> VerificationOrchestrator:
+        config_path = os.environ.get("LEAD_VERIFIER_CONFIG")
+        scrapers = []
+        if config_path:
+            try:
+                config = load_configuration(config_path)
+                scrapers = build_scrapers(config)
+            except (ConfigurationError, FileNotFoundError, ValueError) as exc:
+                messagebox.showwarning("Configuration error", f"Failed to load configuration: {exc}")
+        if not scrapers:
+            LOGGER.warning("No scrapers configured for UI - falling back to EchoScraper")
+            scrapers = [EchoScraper()]
+        return VerificationOrchestrator(scrapers)
 
 
 def main() -> None:
