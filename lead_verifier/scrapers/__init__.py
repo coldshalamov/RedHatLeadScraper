@@ -1,3 +1,13 @@
 """Web scrapers and adapters for third-party lead sources."""
 
-__all__: list[str] = []
+from .base import BrowserScraper, BrowserScraperConfig  # noqa: F401
+from .fast_people_search import FastPeopleSearchScraper  # noqa: F401
+from .true_people_search import TruePeopleSearchConfig, TruePeopleSearchScraper  # noqa: F401
+
+__all__ = [
+    "BrowserScraper",
+    "BrowserScraperConfig",
+    "FastPeopleSearchScraper",
+    "TruePeopleSearchConfig",
+    "TruePeopleSearchScraper",
+]
