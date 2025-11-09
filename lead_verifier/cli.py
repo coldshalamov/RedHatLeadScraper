@@ -6,10 +6,11 @@ import logging
 import sys
 from pathlib import Path
 
+from lead_verifier.orchestrator import VerificationOrchestrator
+
 from .config import load_configuration
 from .factory import build_scrapers
 from .io import load_leads, write_results
-from .orchestrator import VerificationOrchestrator
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

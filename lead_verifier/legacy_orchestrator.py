@@ -1,4 +1,4 @@
-"""Core orchestration logic for the lead verifier workflows."""
+"""Legacy orchestration helpers retained for the desktop UI."""
 from __future__ import annotations
 
 import csv

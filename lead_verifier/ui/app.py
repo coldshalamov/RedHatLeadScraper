@@ -9,8 +9,8 @@ from tkinter import filedialog, messagebox, ttk
 from typing import Dict, Iterable, List, Optional
 
 from ..ingestion import export_to_csv, export_to_excel
+from ..legacy_orchestrator import LeadVerifierOrchestrator, LeadVerificationTask
 from ..models import LeadVerificationResult
-from ..orchestrator import LeadVerifierOrchestrator, LeadVerificationTask
 
 
 @dataclass

@@ -1,6 +1,7 @@
 """Top-level package for the integrated lead verification toolkit."""
 
 from . import models  # noqa: F401
+from .legacy_orchestrator import LeadVerifierOrchestrator  # noqa: F401
 from .models import (
     LeadInput,
     LeadResult,
@@ -10,7 +11,6 @@ from .models import (
     AggregatedContact,
     AggregatedLeadResult,
 )
-from .orchestrator import LeadVerifierOrchestrator  # noqa: F401
 
 __all__ = [
     "LeadInput",
