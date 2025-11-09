@@ -1,0 +1,17 @@
+# Example configuration for the lead verification orchestrator.
+# Duplicate this file and adjust the enabled scrapers and rate limits to match your environment.
+scrapers:
+  - name: echo
+    class: lead_verifier.scrapers.sample.EchoScraper
+    enabled: true
+    options:
+      include_metadata: true
+    delay_seconds: 0.5
+    rate_limit_per_minute: 120
+  # - name: fast_people_search
+  #   class: path.to.FastPeopleSearchScraper
+  #   enabled: false
+  #   options:
+  #     api_key: "..."
+  #   delay_seconds: 1.0
+  #   rate_limit_per_minute: 30

@@ -1,0 +1,14 @@
+{
+  "scrapers": [
+    {
+      "name": "echo",
+      "class": "lead_verifier.scrapers.sample.EchoScraper",
+      "enabled": true,
+      "options": {
+        "include_metadata": true
+      },
+      "delay_seconds": 0.5,
+      "rate_limit_per_minute": 120
+    }
+  ]
+}
