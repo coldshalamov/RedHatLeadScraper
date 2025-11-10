@@ -17,10 +17,10 @@ Automated Lead Verifier for phone numbers and emails.
    ```
 3. **Launch the integrated tool (dev entry point):**
    ```bash
-   python -m lead_verifier
+   python -m lead_verifier path/to/input.xlsx path/to/output.csv --config config/lead_verifier.example.yaml
    ```
-   The command above will host the orchestrated scrapers and (eventual) UI once the
-   implementation lands. For now it serves as the entry point for development.
+   The package entry point delegates to the CLI described below. Run
+   `python -m lead_verifier --help` to review the available options.
 
 ## Lead verification orchestrator
 
