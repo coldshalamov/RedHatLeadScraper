@@ -13,8 +13,17 @@ from .factory import build_scrapers
 from .io import load_leads, write_results
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Aggregate lead contact details from multiple scrapers")
+def build_parser(*, prog: str | None = None) -> argparse.ArgumentParser:
+    """Return an ``ArgumentParser`` configured for the orchestrator CLI."""
+
+    return argparse.ArgumentParser(
+        prog=prog,
+        description="Aggregate lead contact details from multiple scrapers",
+    )
+
+
+def parse_args(argv: list[str] | None = None, *, prog: str | None = None) -> argparse.Namespace:
+    parser = build_parser(prog=prog)
     parser.add_argument("input", help="Path to the input spreadsheet (CSV or XLSX)")
     parser.add_argument("output", help="Path where the aggregated results should be written")
     parser.add_argument(
