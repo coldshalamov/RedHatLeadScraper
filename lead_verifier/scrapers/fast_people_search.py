@@ -122,7 +122,16 @@ class FastPeopleSearchScraper:
         if self._rate_limiter is not None:
             self._rate_limiter()
 
-        search_url = self._build_search_url(lead)
+        try:
+            search_url = self._build_search_url(lead)
+        except ValueError as exc:
+            LOGGER.error(
+                "Cannot build FastPeopleSearch URL for lead %s: %s",
+                lead.display_name(),
+                exc,
+            )
+            raise
+
         LOGGER.info("Navigating to %s", search_url)
 
         phones: List[PhoneNumberResult] = []
@@ -131,7 +140,9 @@ class FastPeopleSearchScraper:
             driver.get(search_url)
             phones = self._extract_phone_numbers(driver)
         except Exception as exc:  # pragma: no cover - runtime guard
-            LOGGER.exception("Failed to retrieve results for %s %s", lead.first_name, lead.last_name)
+            LOGGER.exception(
+                "Failed to retrieve results for lead %s", lead.display_name()
+            )
             errors.append(str(exc))
 
         contacts: List[ContactDetail] = phone_results_to_contacts(phones)
@@ -183,7 +194,30 @@ class FastPeopleSearchScraper:
             return None
 
     def _build_search_url(self, lead: LeadInput) -> str:
-        name = quote_plus(f"{lead.first_name} {lead.last_name}")
+        first_name = (lead.first_name or "").strip()
+        last_name = (lead.last_name or "").strip()
+
+        if not first_name or not last_name:
+            raw_name = (lead.name or "").strip()
+            if not raw_name:
+                display_name = lead.display_name().strip()
+                # ``display_name`` falls back to ``(Unnamed Lead)`` when nothing is set.
+                if display_name and display_name != "(Unnamed Lead)":
+                    raw_name = display_name
+
+            if raw_name:
+                parts = [part for part in raw_name.split() if part]
+                if parts and not first_name:
+                    first_name = parts[0]
+                if len(parts) > 1 and not last_name:
+                    last_name = " ".join(parts[1:])
+
+        if not first_name or not last_name:
+            raise ValueError(
+                f"Lead '{lead.display_name()}' is missing a usable first and last name for FastPeopleSearch lookup."
+            )
+
+        name = quote_plus(f"{first_name} {last_name}")
         if lead.city or lead.state:
             location = " ".join(filter(None, [lead.city, lead.state]))
             location = quote_plus(location)
