@@ -9,6 +9,20 @@
       },
       "delay_seconds": 0.5,
       "rate_limit_per_minute": 120
+    },
+    {
+      "name": "true_people_search",
+      "class": "lead_verifier.scrapers.true_people_search.TruePeopleSearchScraper",
+      "enabled": false,
+      "options": {
+        "config": {
+          "headless": false,
+          "throttle_seconds": 5.0,
+          "wait_for_captcha": false
+        }
+      },
+      "delay_seconds": 5.0,
+      "rate_limit_per_minute": 12
     }
   ]
 }

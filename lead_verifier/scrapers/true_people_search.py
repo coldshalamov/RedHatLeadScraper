@@ -12,15 +12,21 @@ Prerequisites
 from __future__ import annotations
 
 import contextlib
-from dataclasses import dataclass
-from typing import List, Optional
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode
 
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-from ..models import PersonSearch, ScraperResult
+from ..models import (
+    LeadInput,
+    LeadVerification,
+    PersonSearch,
+    ScraperResult,
+    email_records_to_contacts,
+)
 from .base import BrowserScraper, BrowserScraperConfig
 
 
@@ -43,12 +49,47 @@ class TruePeopleSearchScraper(BrowserScraper):
         execution once a CAPTCHA dialog is detected.
     """
 
+    name = "true_people_search"
     provider = "truepeoplesearch.com"
     NOT_FOUND_TEXT = "We could not find any records for that search criteria."
     EMAIL_SECTION_TITLE = "Email Addresses"
 
-    def __init__(self, config: Optional[TruePeopleSearchConfig] = None) -> None:
-        super().__init__(config=config or TruePeopleSearchConfig())
+    def __init__(self, config: Optional[TruePeopleSearchConfig | Dict[str, Any]] = None) -> None:
+        if isinstance(config, dict):
+            resolved_config = TruePeopleSearchConfig(**config)
+        else:
+            resolved_config = config or TruePeopleSearchConfig()
+        super().__init__(config=resolved_config)
+
+    def verify(self, lead: LeadInput) -> LeadVerification:
+        """Translate :meth:`search` results into orchestrator-friendly output."""
+
+        full_name = (lead.name or " ".join(filter(None, [lead.first_name, lead.last_name]))).strip()
+        if not full_name:
+            return LeadVerification(
+                source=self.name,
+                contacts=[],
+                raw_data={"error": "Lead is missing a name."},
+            )
+
+        query = PersonSearch(full_name=full_name, city_state_zip=self._derive_location(lead))
+        try:
+            result = self.search(query)
+        except Exception as exc:  # pragma: no cover - defensive guard around playwright
+            return LeadVerification(
+                source=self.name,
+                contacts=[],
+                raw_data={"error": str(exc), "query": asdict(query)},
+            )
+
+        contacts = email_records_to_contacts(result.emails)
+        raw_data = {
+            "found": result.found,
+            "notes": list(result.notes.messages),
+            "emails": [asdict(email) for email in result.emails],
+            "query": asdict(query),
+        }
+        return LeadVerification(source=self.name, contacts=contacts, raw_data=raw_data)
 
     def search(self, query: PersonSearch) -> ScraperResult:
         """Search TruePeopleSearch and return discovered email addresses."""
@@ -87,6 +128,17 @@ class TruePeopleSearchScraper(BrowserScraper):
 
     # ------------------------------------------------------------------
     # Helpers
+    def _derive_location(self, lead: LeadInput) -> Optional[str]:
+        """Return a combined city/state/zip string if location metadata is available."""
+
+        city = (lead.city or "").strip()
+        state = (lead.state or "").strip()
+        postal_code = str(lead.metadata.get("zip") or lead.metadata.get("postal_code") or "").strip()
+
+        city_state = ", ".join(part for part in [city, state] if part)
+        components = [component for component in [city_state, postal_code] if component]
+        return " ".join(components) or None
+
     def _build_query_url(self, query: PersonSearch) -> str:
         params = {
             "name": query.full_name,
