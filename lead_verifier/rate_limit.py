@@ -60,6 +60,8 @@ class RateLimitedScraper:
     def verify(self, lead: LeadInput) -> LeadVerification:
         self._rate_limiter.acquire()
         result = self._scraper.verify(lead)
+        if result.source != self.name:
+            result.source = self.name
         if self._delay_policy.delay_seconds > 0:
             time.sleep(self._delay_policy.delay_seconds)
         return result
