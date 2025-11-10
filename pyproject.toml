@@ -14,10 +14,16 @@ dependencies = [
     "beautifulsoup4",
     "pandas",
     "PySide6",
+    "pyyaml",
+    "openpyxl",
 ]
 
 [project.optional-dependencies]
 dev = [
     "black",
     "ruff",
+]
+scrapers = [
+    "selenium",
+    "playwright",
 ]
