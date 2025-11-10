@@ -12,6 +12,8 @@ Automated Lead Verifier for phone numbers and emails.
 2. **Install dependencies** declared in `pyproject.toml`:
    ```bash
    pip install -e .
+   # Include browser automation helpers for the bundled scrapers (optional)
+   pip install -e .[scrapers]
    ```
 3. **Launch the integrated tool (dev entry point):**
    ```bash
@@ -37,16 +39,17 @@ python -m lead_verifier.cli path/to/input.xlsx path/to/output.csv --config confi
 - `--max-workers` – cap the number of worker threads used in concurrent mode.
 - `--raise-on-error` – propagate scraper exceptions instead of annotating the output with error details.
 
-The CLI accepts CSV or Excel spreadsheets for both input and output. When using
-Excel files make sure the `openpyxl` package is installed.
+The CLI accepts CSV or Excel spreadsheets for both input and output. Excel
+support ships with the project via the `openpyxl` dependency installed by
+default.
 
 ### Configuration
 
 Scrapers are enabled and tuned through a YAML or JSON configuration file. See
 [`config/lead_verifier.example.yaml`](config/lead_verifier.example.yaml) or
 [`config/lead_verifier.example.json`](config/lead_verifier.example.json) for a
-template. (YAML support requires the optional `pyyaml` dependency; otherwise use
-the JSON variant.) Each scraper entry can:
+template. YAML parsing is available out of the box via the bundled `pyyaml`
+dependency. Each scraper entry can:
 
 - Enable or disable the scraper via the `enabled` flag.
 - Point to the implementing class using the `class` field.
@@ -96,7 +99,7 @@ python -m lead_verifier.ui.app
 
 ### Usage tips
 
-- CSV imports work out of the box. Excel imports/exports require the optional `pandas` dependency (`pip install pandas`).
+- CSV imports work out of the box. Excel imports/exports rely on the bundled `pandas` dependency.
 - The UI runs verification tasks in background threads so you can keep filtering or exporting while the job continues.
 - Use the filter box to quickly narrow down rows; source badges help identify which scraper supplied each result.
 - Results can be cleared at any point without re-importing the file.
@@ -121,10 +124,11 @@ Use `Ctrl+C` in the terminal to stop the process if you launched it from a conso
 
 The new Python scrapers live under `lead_verifier/scrapers`. They rely on
 [Microsoft Playwright](https://playwright.dev/python/) to drive a Chromium
-browser instance. Install the runtime dependencies with:
+browser instance. Install the optional browser automation dependencies with the
+`scrapers` extra and then download the Playwright runtime:
 
 ```bash
-pip install playwright
+pip install -e .[scrapers]
 playwright install chromium
 ```
 
