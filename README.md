@@ -133,6 +133,18 @@ Run the scraper in headful mode (disable headless) so a human can solve the
 challenge before continuing. The `TruePeopleSearchConfig` class exposes
 `headless` and `throttle_seconds` settings to help control execution.
 
+### Orchestrator integration
+
+`TruePeopleSearchScraper.verify` produces `LeadVerification` objects compatible
+with the `VerificationOrchestrator`. The method builds the legacy
+`PersonSearch` query from the incoming `LeadInput`, converts discovered emails
+into `ContactDetail` entries, and annotates the response with structured
+metadata (including error information when the lookup fails). Enable the
+scraper through the configuration files shown in
+[`config/lead_verifier.example.yaml`](config/lead_verifier.example.yaml) or
+[`config/lead_verifier.example.json`](config/lead_verifier.example.json) using
+the scraper name `true_people_search`.
+
 ## Repository Layout
 
 - `lead_verifier/` – Python package containing ingestion, scraping, orchestration,
